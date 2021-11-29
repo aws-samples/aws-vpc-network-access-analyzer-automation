@@ -1,0 +1,257 @@
+---
+Description: Deploys 3 VPCs, 1 DirectoryService VPC and peering connection to specific subnets within the other 2 VPCs. When testing ReachabilityAnalyzer, this provides both a path found and path not found scenario.
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  LatestAmiId:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+
+Resources:
+  # VPCs
+  DirectoryServiceVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.16.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+
+  BusinessAppVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/20
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+
+  # Subnets
+  DirectoryServiceVPCSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DirectoryServiceVPC
+      CidrBlock: 172.16.0.0/24
+
+  DirectoryServiceVPCNATSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DirectoryServiceVPC
+      CidrBlock: 172.16.1.0/24
+      MapPublicIpOnLaunch: true
+
+  BusinessAppVPCSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BusinessAppVPC
+      CidrBlock: 192.168.14.0/24
+      MapPublicIpOnLaunch: true
+
+  # VPC Peering Connection
+  DirectoryServiceVPCToBusinessAppVPC:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref DirectoryServiceVPC
+      PeerVpcId: !Ref BusinessAppVPC
+
+  # Internet Gateway
+  BusinessAppVPCIG:
+    Type: AWS::EC2::InternetGateway
+
+  DirectoryServiceVPCIG:
+    Type: AWS::EC2::InternetGateway
+
+  # Internet Gateway Attachment
+  BusinessAppVPCIGAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: BusinessAppVPC
+      InternetGatewayId:
+        Ref: BusinessAppVPCIG
+
+  DirectoryServiceVPCIGAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: DirectoryServiceVPC
+      InternetGatewayId:
+        Ref: DirectoryServiceVPCIG
+
+
+  # NAT Gateway 
+  DirectoryServiceVPCNAT:
+    DependsOn: DirectoryServiceVPCNATEIP
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+         Fn::GetAtt:
+         - DirectoryServiceVPCNATEIP
+         - AllocationId
+      SubnetId:
+         Ref: DirectoryServiceVPCNATSubnet
+
+  # NAT Gateway EIP
+  DirectoryServiceVPCNATEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  # Routes
+  DirectoryServiceVPCSubnetToBusinessAppVPCSubnet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 192.168.14.0/24
+      VpcPeeringConnectionId:
+        Ref: DirectoryServiceVPCToBusinessAppVPC
+      RouteTableId:
+        Ref: DirectoryServiceVPCSubnetARouteTable
+
+
+  BusinessAppVPCSubnetToDirectoryServiceVPCSubnet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 172.16.0.0/24
+      VpcPeeringConnectionId:
+        Ref: DirectoryServiceVPCToBusinessAppVPC
+      RouteTableId:
+        Ref: BusinessAppVPCSubnetRouteTable
+
+
+  BusinessAppRouteToInternetGateway:
+    DependsOn: BusinessAppVPCIGAttach
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: BusinessAppVPCIG
+      RouteTableId:
+        Ref: BusinessAppVPCSubnetRouteTable
+
+
+  DirectoryServiceSubnetToInternet:
+    DependsOn: DirectoryServiceVPCNAT
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: DirectoryServiceVPCNAT
+      RouteTableId:
+        Ref: DirectoryServiceVPCSubnetARouteTable
+
+
+  DirectoryServiceNATSubnetToInternet:
+    DependsOn: DirectoryServiceVPCIGAttach
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: DirectoryServiceVPCIG
+      RouteTableId:
+        Ref: DirectoryServiceVPCNATSubnetARouteTable
+
+  # Route Tables
+  DirectoryServiceVPCSubnetARouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: DirectoryServiceVPC
+
+  DirectoryServiceVPCNATSubnetARouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: DirectoryServiceVPC
+
+  BusinessAppVPCSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: BusinessAppVPC
+
+  # Route Table Subnet Association
+  DirectoryServiceSubnetRTAss:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DirectoryServiceVPCSubnetARouteTable
+      SubnetId: !Ref DirectoryServiceVPCSubnet
+
+  DirectoryServiceNATSubnetRTAss:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DirectoryServiceVPCNATSubnetARouteTable
+      SubnetId: !Ref DirectoryServiceVPCNATSubnet
+
+  BusinessAppSubnetRTAss:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref BusinessAppVPCSubnetRouteTable
+      SubnetId: !Ref BusinessAppVPCSubnet
+
+  # Security Groups
+  DirectoryServiceServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http(s) and egress traffic
+      VpcId: !Ref DirectoryServiceVPC
+      SecurityGroupIngress:
+        - IpProtocol: "-1"  # Non-compliant configuration opening up Ingress to Directory Service to all Ports
+          # FromPort: 53           
+          # ToPort: 53
+          CidrIp: 192.168.14.0/24
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0       # Non-compliant configuration opening up Egress from 55.3.0.0/16 to the Internet
+
+  BusinessAppServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http(s) and egress traffic
+      VpcId: !Ref BusinessAppVPC
+      SecurityGroupIngress:
+        - IpProtocol: "-1"
+          # FromPort: 80          # Non-compliant configuration opening up Ingress to Business App to all Ports
+          # ToPort: 80
+          CidrIp: 0.0.0.0/0
+        # - IpProtocol: tcp
+        #   FromPort: 443
+        #   ToPort: 443
+        #   CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - CidrIp: 172.16.0.0/24   # Non-compliant configuration opening up Egress to Business App to all Ports
+          # FromPort: 53
+          # ToPort: 53
+          IpProtocol: "-1"
+
+  # EC2 Instances
+  DirectoryServiceInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      SubnetId:
+        Ref: DirectoryServiceVPCSubnet
+      SecurityGroupIds:
+        - Ref: DirectoryServiceServerSG
+
+  BusinessAppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      SubnetId:
+        Ref: BusinessAppVPCSubnet
+      SecurityGroupIds:
+        - Ref: BusinessAppServerSG
+
+Outputs:
+  BusinessApplicationVPC:
+    Description: Business Application VPC
+    Value: !Ref BusinessAppVPC
+  DirectoryServiceVPC:
+    Description: Active Directory VPC
+    Value: !Ref DirectoryServiceVPC
+
+
+

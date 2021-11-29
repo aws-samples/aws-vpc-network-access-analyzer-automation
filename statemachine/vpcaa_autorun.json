@@ -1,0 +1,50 @@
+{
+    "Comment": "A state machine to autorun network scope analysis and send the findings to security hub using VPC Acccess Analyzer",
+    "StartAt": "RunNetworkScopeAnalysis",
+    "States": {
+        "RunNetworkScopeAnalysis": {
+            "Type": "Task",
+            "Resource": "${RunNetworkScopeAnalysisArn}",
+            "ResultPath": "$.scope_analysis_details",
+            "Next": "WaitForAnalysisToRun"
+        },
+
+        "WaitForAnalysisToRun": {
+            "Type": "Wait",
+            "Seconds": 60,
+            "Next": "CheckNetworkScopeAnalysis" 
+        },
+
+        "CheckNetworkScopeAnalysis": {
+            "Type": "Task",
+            "Resource": "${CheckNetworkScopeAnalysisArn}",
+            "ResultPath":"$.scope_analysis_completed",
+            "Next": "SendFindingToSecurityHub"
+        },
+
+        "SendFindingToSecurityHub": {
+            "Type": "Task",
+            "Resource": "${SendFindingsToSecurityHubArn}",
+            "ResultPath": "$.scope_analysis_details",
+            "Next": "IsAllAnalysisCompleted"
+            
+        },
+
+        "IsAllAnalysisCompleted": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.scope_analysis_completed",
+                    "BooleanEquals": false,
+                    "Next": "WaitForAnalysisToRun"
+                }
+            ],
+            "Default": "GenerateResult"
+        },
+
+        "GenerateResult": {
+            "Type": "Succeed",
+            "OutputPath": "$.scope_analysis_details"
+        }
+    }
+}

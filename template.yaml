@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  vpcaa-autorun
+
+  Sample SAM Template for vpcaa-autorun
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: aws-vpcaa-autorun
+    Description: AWS VPC Access Analyzer Autorun is an opensource tools that can help you trigger Network Scope Analysis and send the findings to AWS Security Hub
+    Author: Ozioma Uzoegwu
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: LICENSE.txt
+    ReadmeUrl: README.md
+    Labels: ["VPC", "Access Analyzer","Autorun"]
+    HomePageUrl: https://github.com/aws-samples/aws-vpc-access-analyzer-autorun
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/aws-samples/aws-vpc-access-analyzer-autorun
+
+Globals:
+  Function:
+    Timeout: 300
+
+Resources:
+  VPCAAAutoRunStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/vpcaa_autorun.json
+      DefinitionSubstitutions:
+        RunNetworkScopeAnalysisArn: !GetAtt RunNetworkScopeAnalysis.Arn
+        CheckNetworkScopeAnalysisArn: !GetAtt CheckNetworkScopeAnalysis.Arn
+        SendFindingsToSecurityHubArn: !GetAtt SendFindingsToSecurityHub.Arn
+      Tracing:
+        Enabled: True
+      Events:
+        AnalysisSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(2 minutes)'
+            Name: NetworkScopeAnalysisSchedule
+            Enabled: true
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RunNetworkScopeAnalysis
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckNetworkScopeAnalysis
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendFindingsToSecurityHub
+
+
+  RunNetworkScopeAnalysis:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/run_network_scope_analysis/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Role: !GetAtt LambdaVPCAccessAnalyzerRole.Arn
+
+  
+  CheckNetworkScopeAnalysis:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/check_network_scope_analysis/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Role: !GetAtt LambdaVPCAccessAnalyzerRole.Arn
+
+
+  SendFindingsToSecurityHub:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/send_findings_to_security_hub/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Role: !GetAtt LambdaSecurityHubRole.Arn
+
+  LambdaSecurityHubRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaSecurityHubRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+
+  LambdaVPCAccessAnalyzerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaVPCAccessAnalyzerRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+
+  SecurityHubFindingsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PolicyToAllowAccessToSecurityHub
+      Roles:
+        - !Ref LambdaSecurityHubRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - securityhub:BatchUpdateFindings
+              - securityhub:BatchImportFindings
+            Resource: '*'
+      
+
+  VPCAccessAnalyzerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PolicyToAllowAccessToVPCAccessAnalyzer
+      Roles:
+        - !Ref LambdaSecurityHubRole
+        - !Ref LambdaVPCAccessAnalyzerRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ec2:CreateNetworkInsightsAccessScope
+              - ec2:DeleteNetworkInsightsAccessScope
+              - ec2:DescribeNetworkInsightsAccessScopes
+              - ec2:GetNetworkInsightsAccessScopeContent
+              - ec2:DeleteNetworkInsightsAccessScopeAnalysis
+              - ec2:GetNetworkInsightsAccessScopeAnalysisFindings
+              - ec2:StartNetworkInsightsAccessScopeAnalysis
+              - ec2:DescribeNetworkInsightsAccessScopeAnalyses
+              - ec2:DescribeTransitGatewayConnects
+              - ec2:GetTransitGatewayRouteTablePropagations
+              - ec2:DescribeTransitGatewayPeeringAttachments
+              - ec2:SearchTransitGatewayRoutes
+              - ec2:DescribeTransitGatewayRouteTables
+              - ec2:DescribeTransitGatewayVpcAttachments
+              - ec2:DescribeTransitGatewayAttachments
+              - ec2:DescribeTransitGateways
+              - ec2:GetManagedPrefixListEntries
+              - ec2:DescribeManagedPrefixLists
+              - ec2:DescribeAvailabilityZones
+              - ec2:DescribeCustomerGateways
+              - ec2:DescribeInstances
+              - ec2:DescribeInternetGateways
+              - ec2:DescribeNatGateways
+              - ec2:DescribeNetworkAcls
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DescribePrefixLists
+              - ec2:DescribeRegions
+              - ec2:DescribeRouteTables
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeVpcEndpoints
+              - ec2:DescribeVpcPeeringConnections
+              - ec2:DescribeVpcs
+              - ec2:DescribeVpnConnections
+              - ec2:DescribeVpnGateways
+              - ec2:DescribeVpcEndpointServiceConfigurations
+              - elasticloadbalancing:DescribeListeners
+              - elasticloadbalancing:DescribeLoadBalancers
+              - elasticloadbalancing:DescribeLoadBalancerAttributes
+              - elasticloadbalancing:DescribeRules
+              - elasticloadbalancing:DescribeTags
+              - elasticloadbalancing:DescribeTargetGroups
+              - elasticloadbalancing:DescribeTargetHealth
+              - tiros:CreateQuery
+              - tiros:GetQueryAnswer
+              - ec2:CreateTags
+              - ec2:DeleteTags
+              - resource-groups:ListGroupResources
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+
+  
+      
+    

@@ -1,0 +1,32 @@
+{
+   "MatchPaths":[
+      {
+         "Source":{
+            "ResourceStatement":{
+               "ResourceTypes":[
+                  "AWS::EC2::InternetGateway"
+               ]
+            }
+         },
+         "Destination":{
+            "ResourceStatement":{
+               "ResourceTypes":[
+                  "AWS::EC2::Instance"
+               ]
+            }
+         }
+      }
+   ],
+   "ExcludePaths":[
+      {
+         "Destination":{
+            "PacketHeaderStatement":{
+               "DestinationPorts":[
+                  "80",
+                  "443"
+               ]
+            }
+         }
+      }
+   ]
+}
