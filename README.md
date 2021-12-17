@@ -1,6 +1,10 @@
-# vpcaa-autorun
+# VPC Network Access Analyzer Automation
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+This project contains source code and supporting files that you can use to schedule Network Access Scope Analysis and send the result of the findings to AWS Security Hub.
+
+In re:Invent 2021, AWS announced the VPC Netowkr Access Analyzer. A new tool that uses Network Access Scopes to specify the desired connectivity between your AWS resources. You can analyze a initiate analysis of a given scope to generate a set of findings, each of which indicates an unexpected network path between the AWS resources defined in the scope. For more details see the launch blog [here](https://aws.amazon.com/blogs/aws/new-amazon-vpc-network-access-analyzer/).
+
+
 
 - hello_world - Code for the application's Lambda function.
 - events - Invocation events that you can use to invoke the function.
@@ -128,8 +132,3 @@ aws cloudformation delete-stack --stack-name vpcaa-autorun
 See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
 
 Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
-
-## Authors
-Shiva Vaidyanathan - vaidys@amazon.com
-
-Ozioma Uzoegwu - ouzoegwu@amazon.com
