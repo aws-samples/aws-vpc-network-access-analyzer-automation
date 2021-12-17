@@ -22,4 +22,16 @@ The step function runs at the defined interval and during the execution, the fol
 
 4. If the analyses are not complete, the execution returns to Step 2, otherwise the analysis result is formatted as an output of the step function.
 
+## How to deploy the solution
 
+The VPC Network Access Analyzer Automation solution is a SAM application with the lambda functions developed in Python. To deploy the SAM application you can use AWS CloudShell (which comes with AWS CLI, SAM CLI and Python pre-installed). You can also use any other CLI tool in which case you will need to install SAM CLI following the [instructions](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
+
+
+Clone the respository and deploy the VPC Network Access Analyzer Automation solution in your AWS account using the commands below:
+
+```bash
+sam build
+sam deploy --guided --capabilities CAPABILITY_NAMED_IAM
+```
+
+The “sam deploy —guided —capabilities CAPABILITY_NAMED_IAM“ command asks you to specify a few parameters. You can select the defaults by pressing “Enter” at each prompt.
