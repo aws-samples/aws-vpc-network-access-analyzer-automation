@@ -37,7 +37,7 @@ Resources:
         AnalysisSchedule:
           Type: Schedule
           Properties:
-            Schedule: 'rate(2 minutes)'
+            Schedule: 'rate(12 hours)'
             Name: NetworkScopeAnalysisSchedule
             Enabled: true
       Policies:
