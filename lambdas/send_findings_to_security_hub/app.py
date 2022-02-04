@@ -49,7 +49,8 @@ def lambda_handler(event, context):
             # construct security hub finding
             findings_count = len(analysis_findings)
             if findings_processed4sh == False and analysis_status == 'succeeded' and findings_count > 0:
-                security_hub_finding_item = construct_security_hub_finding(scope_id, scope_analysis_id, findings_count, account_id, region_id)
+                findings_source_destination = generate_source_destination_resources(analysis_findings)
+                security_hub_finding_item = construct_security_hub_finding(scope_id, scope_analysis_id, findings_source_destination, findings_count, account_id, region_id)
                 security_hub_findings.append(security_hub_finding_item)
                 findings_processed4sh = True
 
@@ -71,9 +72,36 @@ def lambda_handler(event, context):
             logger.info("failed upload" + str(security_hub_response["FailedCount"]))
 
     return updated_scope_analysis_details_list
-    
 
-def construct_security_hub_finding(scope_id, scope_analysis_id, findings_count, account_id, region_id):
+
+def generate_source_destination_resources(analysis_findings):
+    
+    findings_source_destination = []
+    
+    if(len(analysis_findings) > 0):
+
+        # Identify the source and destination for each finding
+        for finding in analysis_findings:
+            finding_id = finding["FindingId"]
+            finding_components = finding["FindingComponents"]
+            source = finding_components[0]["Component"]["Id"]
+            destination = finding_components[len(finding_components) - 1]["Component"]["Id"]
+
+            # Add finding details to the array
+            findings_source_destination.append({
+                "FindingId": finding_id,
+                "Route":{
+                    "Source": source,
+                    "Destination": destination
+                }
+            })
+            print("findings_source_destinations >> " + json.dumps(findings_source_destination))
+        return {
+            "FindingRoutes": findings_source_destination
+        }
+    return {}
+
+def construct_security_hub_finding(scope_id, scope_analysis_id, findings_source_destination, findings_count, account_id, region_id):
     
     # Initialize date time 
     d = datetime.datetime.utcnow()
@@ -84,6 +112,7 @@ def construct_security_hub_finding(scope_id, scope_analysis_id, findings_count, 
         "Description": "You current network configuration does not align with your compliance rules defined in Network Access Analyzer",
         "ProductArn": f"arn:aws:securityhub:{region_id}:{account_id}:product/{account_id}/default",
         "AwsAccountId": account_id,
+        "ProductName": "NetworkAccessAnalyzer",
         "Id": f"scope-analysis-id/{scope_id}", 
         "GeneratorId": "CUSTOM:AutomatedScopeCheckerTool",
         "CreatedAt": d.isoformat("T") + "Z",
@@ -97,8 +126,9 @@ def construct_security_hub_finding(scope_id, scope_analysis_id, findings_count, 
             ]
         },
         "ProductFields":{
-            "vpcaa-autorun/networkaccessanalyzer/NetworkScopeAnalysisId": f"{scope_analysis_id}",
-            "vpcaa-autorun/networkaccessanalyzer/NetworkScopeAnalysisFindingsCount": f"{findings_count}"
+            "vpcaa-autorun/networkaccessanalyzer/securityhub/NetworkScopeAnalysisId": f"{scope_analysis_id}",
+            "vpcaa-autorun/networkaccessanalyzer/securityhub/NetworkScopeAnalysisFindingsCount": f"{findings_count}",
+            "vpcaa-autorun/networkaccessanalyzer/securityhub/NetworkScopeAnalysisFindingsRoute": f"{json.dumps(findings_source_destination)}"
         },
         "Resources": [{
             "Type": "NetworkAccessAnalyzerNetworkAccessScopeId",    
